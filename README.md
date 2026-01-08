@@ -24,3 +24,25 @@ Without a pull-up, the pin floats and reads random values. The external 4.7kΩ r
 
 #### Key Takeaway
 Pull-up resistors prevent floating inputs by connecting the pin to VDD through a resistor. This ensures stable logic levels.
+
+### Day 3-4: LED Control with Push-Pull Output
+
+**Goal**: Control PA5 (green LED) as push-pull output and understand GPIO output registers.
+
+#### Hardware Setup
+- **Pin used**: PA5 (LD2 - green LED on Nucleo board)
+- **Configuration**: GPIO Output, Push-Pull mode
+- **LED circuit**: PA5 → LED → current limiting resistor → GND
+
+#### Code
+```c
+while (1)
+{
+  // Turn LED ON - set PA5 to HIGH (3.3V)
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_SET);
+  HAL_Delay(500);
+
+  // Turn LED OFF - set PA5 to LOW (0V)
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET);
+  HAL_Delay(500);
+}
