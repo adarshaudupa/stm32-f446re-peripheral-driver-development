@@ -46,7 +46,7 @@ while (1)
   HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET);
   HAL_Delay(500);
 }
-
+```
 ### Day 5-6: Open-Drain Output (Register-Level)
 
 **Goal**: Understand open-drain GPIO configuration and validate with register-level debugging.
@@ -70,3 +70,4 @@ GPIOA->OTYPER |= (1 << 9);     // 1 = open-drain, 0 = push-pull
 
 // Disable internal pull-up/down
 GPIOA->PUPDR &= ~(0x3 << 18);  // 00 = no pull
+```
