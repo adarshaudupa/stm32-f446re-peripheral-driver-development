@@ -1,98 +1,181 @@
-# STM32 F446RE Learning Journey
+# STM32F446RE Register-Level Peripheral Driver Development
 
-## Week 1: GPIO Fundamentals
+A hands-on learning journey in **register-level embedded systems programming** on the STM32F446RE microcontroller.
 
-### Day 1-2: Pull-up Resistors and Input Configuration
+## 🎯 Goal
 
-**Goal**: Understand how pull-up resistors prevent floating GPIO inputs.
+Understand **how microcontrollers actually work** by writing code that directly manipulates hardware registers—not using abstraction libraries (HAL). This builds the mental models required for professional embedded systems engineering.
 
-#### Hardware Setup
-- **Pin used**: PC13 (Blue Button on Nucleo board)
-- **Hardware pull-up**: 4.7kΩ external resistor on board
-- **Software pull-up**: Disabled (set to GPIO_NOPULL in code)
+## 📚 What We've Built (Days 1-9)
 
-#### What I Observed
-- **Button not pressed**: PC13 reads HIGH (1) — pulled to VDD by external 4.7kΩ resistor
-- **Button pressed**: PC13 reads LOW (0) — button connects pin directly to GND
+### Week 1: GPIO Fundamentals
+- **Day 1:** LED Blink using GPIO Output (PA5)
+  - Enabled GPIOA clock via RCC
+  - Configured PA5 as output using MODER register
+  - Toggled LED using ODR (Output Data Register)
+  - Mental model: GPIO pins are controlled by setting/clearing specific bits in registers
 
+### Week 2: UART Serial Communication
+- **Day 1:** UART Theory + Hardware Architecture
+  - Understood asynchronous serial protocol (start bit, 8 data bits, stop bit)
+  - Baud rate synchronization (9600 bps = 104 μs per bit)
+  - USART2 hardware (PA2=TX, PA3=RX)
 
-#### Code Explanation
-The main loop reads PC13 every 500ms and prints the state over UART.
+- **Day 2:** UART Transmit (TX) Implementation ✅ **Complete**
+  - Configured PA2 as Alternate Function (AF7 = USART2_TX)
+  - Calculated baud rate register (BRR) for 9600 baud
+  - Implemented TXE (Transmit Data Register Empty) synchronization
+  - Built `UART2_SendString()` function
+  - Mental model: 2-stage pipeline (DR buffer → Shift Register) prevents data loss
 
-#### Why Pull-ups Matter
-Without a pull-up, the pin floats and reads random values. The external 4.7kΩ resistor keeps the pin stable at HIGH when the button isn't pressed.
+## 🔧 Technology Stack
 
-#### Key Takeaway
-Pull-up resistors prevent floating inputs by connecting the pin to VDD through a resistor. This ensures stable logic levels.
+| Component | Version |
+|-----------|---------|
+| Microcontroller | STM32F446RET6 (ARM Cortex-M4, 180 MHz) |
+| IDE | STM32CubeIDE v1.13.0+ |
+| Compiler | GCC (arm-none-eabi) |
+| Debugger | ST-LINK/V2-1 (on-board) |
+| Protocol | UART @ 9600 baud |
 
-### Day 3-4: LED Control with Push-Pull Output
+## 📋 Key Concepts Learned
 
-**Goal**: Control PA5 (green LED) as push-pull output and understand GPIO output registers.
+### 1. Registers and Memory-Mapped I/O
+- Peripherals are controlled by writing to memory addresses
+- Each register is a 32-bit control panel with individual bit switches
+- Example: `GPIOA->ODR` controls GPIO output voltages
 
-#### Hardware Setup
-- **Pin used**: PA5 (LD2 - green LED on Nucleo board)
-- **Configuration**: GPIO Output, Push-Pull mode
-- **LED circuit**: PA5 → LED → current limiting resistor → GND
+### 2. Clock System (RCC)
+- Every peripheral starts disabled (saves power)
+- Must enable clock before accessing peripheral registers
+- Three bus systems: AHB1 (GPIO), APB1 (USART2), APB2 (USART1/6)
 
-#### Code
+### 3. Bit Operations
 ```c
-while (1)
-{
-  // Turn LED ON - set PA5 to HIGH (3.3V)
-  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_SET);
-  HAL_Delay(500);
-
-  // Turn LED OFF - set PA5 to LOW (0V)
-  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET);
-  HAL_Delay(500);
-}
+GPIOA->ODR |= (1 << 5);    // Set bit 5 (OR operation)
+GPIOA->ODR &= ~(1 << 5);   // Clear bit 5 (AND NOT)
+GPIOA->ODR ^= (1 << 5);    // Toggle bit 5 (XOR)
 ```
-### Day 5-6: Open-Drain Output (Register-Level)
 
-**Goal**: Understand open-drain GPIO configuration and validate with register-level debugging.
+### 4. Alternate Functions (AF)
+- GPIO pins can be controlled by peripherals (UART, SPI, I2C, etc.)
+- MODER register selects mode: 01=Output, 10=Alternate Function
+- AFR register selects which peripheral (AF7=USART2 on PA2)
 
-#### Hardware Setup
-- **Pin**: PA9 (open-drain output)
-- **External pull-up**: 330Ω to 3.3V (temporary, 2.2kΩ recommended for production)
-- **Validation**: Digital multimeter + UART debug output
+### 5. Hardware Synchronization
+- CPU is 1000x faster than UART hardware
+- Must wait for TXE flag before writing next byte
+- Pipeline architecture (DR + Shift Register) enables buffering
 
-#### Register Configuration
-```c
-// Enable GPIOA clock (required before any GPIO access)
-RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN;
+## 📂 Project Structure
 
-// Set PA9 to output mode
-GPIOA->MODER &= ~(0x3 << 18);  // Clear bits [19:18]
-GPIOA->MODER |= (0x1 << 18);   // Set to 01 (output)
-
-// Set PA9 to open-drain
-GPIOA->OTYPER |= (1 << 9);     // 1 = open-drain, 0 = push-pull
-
-// Disable internal pull-up/down
-GPIOA->PUPDR &= ~(0x3 << 18);  // 00 = no pull
 ```
-### Day 7: Interrupt-Driven GPIO (EXTI)
-
-**Goal**: Replace polling with hardware interrupts for instant response.
-
-#### Hardware Setup
-- PC13 button (falling edge trigger)
-- PA5 LED (toggles on each press)
-- Response time: <1µs vs 500ms polling delay
-
-#### Register Configuration
-```c
-// Enable SYSCFG clock
-RCC->APB2ENR |= RCC_APB2ENR_SYSCFGEN;
-
-// Route PC13 to EXTI line 13
-SYSCFG->EXTICR[1] |= SYSCFG_EXTICR4_EXTI13_PC;
-
-// Configure EXTI13 for falling edge
-EXTI->FTSR |= EXTI_FTSR_TR13;   // Falling trigger
-EXTI->IMR |= EXTI_IMR_MR13;     // Unmask interrupt
-
-// Enable in NVIC
-NVIC_SetPriority(EXTI15_10_IRQn, 2);
-NVIC_EnableIRQ(EXTI15_10_IRQn);
+stm32-learning/
+├── Core/
+│   ├── Src/
+│   │   └── main.c              # Implementation code
+│   └── Inc/
+│       └── main.h              # Function declarations
+├── Drivers/
+│   └── CMSIS/                  # ARM Cortex-M4 core definitions
+├── Debug/                      # Compiled binaries
+└── README.md                   # This file
 ```
+
+## 🚀 How to Use This Repository
+
+### 1. Setup Hardware
+- Connect STM32 Nucleo-F446RE via USB
+- For UART testing: USB-to-Serial adapter on PA2 (3.3V logic)
+- For signal analysis: Logic analyzer on PA2/PA5
+
+### 2. Build and Flash
+```bash
+# In STM32CubeIDE
+Build → Build Project
+Run → Run
+```
+
+### 3. Test
+- **LED:** Observe PA5 LED blinking every ~500ms
+- **UART:** Connect serial terminal (9600 baud, 8N1) to see "Hello\n" output
+
+## 🧠 Mental Models Built
+
+### GPIO Output Pipeline
+```
+RCC->AHB1ENR (enable clock)
+    ↓
+GPIOA->MODER (set mode: output)
+    ↓
+GPIOA->ODR (set/clear output voltage)
+    ↓
+Physical pin voltage change (3.3V or 0V)
+```
+
+### UART TX Pipeline
+```
+Enable RCC clocks (GPIOA, USART2)
+    ↓
+Configure PA2 as AF7 (USART2_TX)
+    ↓
+Set baud rate (BRR register)
+    ↓
+Enable USART + TX (CR1 register)
+    ↓
+Wait for TXE=1
+    ↓
+Write byte to DR
+    ↓
+Hardware moves DR → Shift Register → TX pin (bit-by-bit)
+    ↓
+Loop back for next byte
+```
+
+## 📖 Learning Resources
+
+### Official Documentation
+- [STM32F446RE Datasheet](https://www.st.com/resource/en/datasheet/stm32f446re.pdf) - Pinouts, electrical specs
+- [RM0390 Reference Manual](https://www.st.com/resource/en/reference_manual/rm0390-stm32f446xx-advanced-armbased-32bit-mcus-stmicroelectronics.pdf) - Register descriptions (1300+ pages)
+- [Nucleo-64 User Manual](https://www.st.com/resource/en/user_manual/um1724-stm32-nucleo-64-development-board-stmicroelectronics.pdf) - Board layout, pinouts
+
+### Code Comments
+Each function in `main.c` has inline comments explaining:
+- Why each register is configured
+- What each bit does
+- The order of operations (why it matters)
+
+## 📅 Next Steps (Days 10+)
+
+- **Day 10:** UART Receive (RX) + interrupt handling
+- **Week 3:** Timer PWM output (for servo control)
+- **Week 4:** ADC analog-to-digital conversion
+- **Week 5:** SPI communication + external peripherals
+
+## 💡 Core Philosophy
+
+> "A person can understand anything if explained from first principles. We don't use magic."
+
+- No HAL abstractions that hide complexity
+- Every line of code corresponds to a hardware action
+- Mental models over memorization
+- Why before What
+
+## 🔗 References
+
+| Topic | File | Lines |
+|-------|------|-------|
+| GPIO Output | `main.c` | 1-50 |
+| UART Initialization | `main.c` | 51-120 |
+| UART Transmit | `main.c` | 121-145 |
+| Main Loop | `main.c` | 146-160 |
+
+## 📝 License
+
+Educational use only. Reference documentation from STMicroelectronics.
+
+---
+
+**Last Updated:** January 16, 2026  
+**Status:** ✅ Week 2 Day 2 Complete  
+**Next Session:** Day 10 (UART RX + Interrupts)
