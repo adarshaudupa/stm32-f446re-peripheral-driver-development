@@ -1,0 +1,4 @@
+../Core/Src/uart_ref.c:10:6:UART2_init	4	static
+../Core/Src/uart_ref.c:28:6:UART_TChar	16	static
+../Core/Src/uart_ref.c:34:6:USART2_RChar	16	static
+../Core/Src/uart_ref.c:45:6:USART2_IRQHandler	16	static

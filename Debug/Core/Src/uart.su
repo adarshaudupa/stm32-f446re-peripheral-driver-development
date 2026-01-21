@@ -1,0 +1,6 @@
+../Core/Src/uart.c:24:6:UART2_Init	32	static
+../Core/Src/uart.c:86:6:UART2_SendChar	16	static
+../Core/Src/uart.c:109:6:UART2_SendString	16	static
+../Core/Src/uart.c:133:6:UART2_ReadChar	16	static
+../Core/Src/uart.c:167:9:UART2_DataAvailable	4	static
+../Core/Src/uart.c:175:6:USART2_IRQHandler	16	static
