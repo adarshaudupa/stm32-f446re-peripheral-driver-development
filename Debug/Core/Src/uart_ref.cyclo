@@ -1,4 +1,3 @@
 ../Core/Src/uart_ref.c:10:6:UART2_init	1
 ../Core/Src/uart_ref.c:28:6:UART_TChar	2
 ../Core/Src/uart_ref.c:34:6:USART2_RChar	3
-../Core/Src/uart_ref.c:45:6:USART2_IRQHandler	3

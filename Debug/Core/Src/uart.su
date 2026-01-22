@@ -1,4 +1,4 @@
-../Core/Src/uart.c:24:6:UART2_Init	32	static
+../Core/Src/uart.c:24:6:UART2_Init	24	static
 ../Core/Src/uart.c:86:6:UART2_SendChar	16	static
 ../Core/Src/uart.c:109:6:UART2_SendString	16	static
 ../Core/Src/uart.c:133:6:UART2_ReadChar	16	static

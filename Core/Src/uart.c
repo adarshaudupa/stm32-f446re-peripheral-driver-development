@@ -50,7 +50,7 @@ void UART2_Init(uint32_t baudrate) {
 	// Formula: BRR = f_PCLK / (16 * baudrate)
 	// APB1 clock = 16 MHz (default after reset)
 	// For 9600: BRR = 16000000 / (16 * 9600) = 104.166
-	uint32_t brr_value = 16000000 / (16 * baudrate);
+	USART2->BRR = 16000000 / (16 * baudrate);
 	USART2->BRR = 0x683;
 	// ========================================================================
 	// STEP 5: ENABLE USART, TX, AND RX

@@ -42,15 +42,3 @@ char USART2_RChar(void)
 }
 
 
-void USART2_IRQHandler(void)
-{
- if(USART2->SR & (1<<5))
- {
-	 char rb=USART2->DR;
-	 buffer[head]=rb;
-	 head++;
-
- if(head>=BUFFER)
-    head=0;
- }
-}
