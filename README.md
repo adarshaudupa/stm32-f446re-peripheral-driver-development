@@ -3,7 +3,7 @@
 Simple command-line interface for LED control via UART on STM32F446RE using bare-metal register programming.
 
 ## Features
-- UART communication (115200 baud, 8N1)
+- UART communication (9600 baud, 8N1)
 - Command parsing and execution
 - LED control commands (ON/OFF/TOGGLE/STATUS)
 - Interactive help menu
