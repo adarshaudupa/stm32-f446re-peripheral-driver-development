@@ -1,148 +1,168 @@
-# STM32 UART CLI - LED Control
+# STM32 UART CLI
 
-Simple command-line interface for LED control via UART on STM32F446RE using bare-metal register programming.
+Bare-metal command-line interface for STM32F446RE with interrupt-driven UART communication. Built without HAL, using direct register manipulation.
 
-## Features
-- UART communication (9600 baud, 8N1)
-- Command parsing and execution
-- LED control commands (ON/OFF/TOGGLE/STATUS)
-- Interactive help menu
-- Error handling for invalid commands
-- Bare-metal register-level programming (no HAL abstraction)
+## 🎯 Features
 
-## Hardware
-- **Board:** STM32 Nucleo-F446RE
-- **MCU:** STM32F446RET6 (ARM Cortex-M4, 180MHz)
-- **LED:** User LED (PA5)
-- **UART:** USART2 (PA2-TX, PA3-RX via ST-Link Virtual COM Port)
+- **Register-level UART configuration** - Manual BRR calculation, CR1/SR/DR register access
+- **Interrupt-driven RX** - 256-byte circular buffer with NVIC-configured ISR
+- **Command parser** - Space-delimited tokenization with input validation
+- **Non-blocking architecture** - Main loop remains responsive during command execution
 
-## Pinout
-| Peripheral | Pin | Function |
-|------------|-----|----------|
-| LED | PA5 | User LED (LD2) |
-| USART2 TX | PA2 | UART transmit |
-| USART2 RX | PA3 | UART receive |
+### Supported Commands
 
-## Software
-- **IDE:** STM32CubeIDE
-- **Programming Style:** Bare-metal register manipulation
-- **Language:** C
-- **Compiler:** ARM GCC
-
-## Commands
 ```
-LED ON      - Turn LED on
-LED OFF     - Turn LED off
-TOGGLE      - Toggle LED state
-STATUS      - Check current LED state
-HELP        - Show available commands
+STATUS          - Display system information
+LED ON          - Turn on GPIO PA5 (onboard LED)
+LED OFF         - Turn off GPIO PA5
+LED TOGGLE      - Toggle LED state
+ECHO <text>     - Echo back user input
 ```
 
-## Usage
-1. Connect Nucleo board via USB to PC
-2. Open serial terminal (PuTTY, Tera Term, minicom, screen, etc.)
-3. Configure terminal settings:
-   - Baud rate: 115200
-   - Data bits: 8
-   - Parity: None
-   - Stop bits: 1
-   - Flow control: None
-4. Type commands and press Enter
+## 🔧 Hardware Setup
 
-## Build & Flash
+**Board:** STM32 Nucleo F446RE  
+**MCU:** STM32F446RET6 (ARM Cortex-M4, 180 MHz max)
+
+**Pin Connections:**
+| Peripheral | Pin  | Function |
+|------------|------|----------|
+| USART2 TX  | PA2  | Serial output (ST-Link VCP) |
+| USART2 RX  | PA3  | Serial input (ST-Link VCP) |
+| LED        | PA5  | Onboard green LED |
+
+**No external hardware required** - uses ST-Link's built-in USB-to-serial converter.
+
+## 📋 Technical Details
+
+### UART Configuration
+
+```c
+// Clock: APB1 = 16 MHz (HSI, no PLL)
+// Baud rate: 115200
+// BRR calculation: PCLK1 / baud_rate = 16000000 / 115200 = 139 (0x8B)
+
+RCC->APB1ENR |= RCC_APB1ENR_USART2EN;  // Enable USART2 clock
+USART2->BRR = 139;                      // Set baud rate
+USART2->CR1 |= USART_CR1_TE | USART_CR1_RE | USART_CR1_RXNEIE;  // TX, RX, RX interrupt
+USART2->CR1 |= USART_CR1_UE;            // Enable USART
+```
+
+### Interrupt Handling
+
+- **ISR:** `USART2_IRQHandler` triggered on RXNE flag
+- **Priority:** NVIC priority 1 (higher than systick)
+- **Buffer:** 256-byte circular buffer with head/tail pointers
+- **Overflow protection:** Wraps around when full (oldest data lost)
+
+### Memory Usage
+
+| Component | Size | Type |
+|-----------|------|------|
+| RX Buffer | 256 bytes | Circular buffer (static) |
+| TX Buffer | None (polling-based) | - |
+| Command Buffer | 128 bytes | Linear buffer (static) |
+| Total RAM | ~400 bytes | BSS segment |
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+- **Software:** STM32CubeIDE or ARM GCC toolchain + OpenOCD
+- **Hardware:** STM32 Nucleo F446RE board
+- **Terminal:** PuTTY, minicom, screen, or any serial terminal
+
+### Build & Flash
+
+**Option 1: STM32CubeIDE**
+```
+1. File > Import > Existing Projects into Workspace
+2. Select this repository folder
+3. Project > Build All
+4. Run > Debug (flashes automatically)
+```
+
+**Option 2: Command Line (if using Makefile)**
 ```bash
-# Clone repository
-git clone https://github.com/adarshaudupa/<repo-name>.git
-cd <repo-name>
-
-# Open project in STM32CubeIDE
-# File → Open Projects from File System
-
-# Build project
-# Project → Build Project (or Ctrl+B)
-
-# Flash to board
-# Run → Debug (or F11)
-# Run → Run (or F5)
+make clean
+make
+st-flash write build/main.bin 0x8000000
 ```
 
-## Example Session
-```
-> HELP
-Available commands:
-  LED ON   - Turn LED on
-  LED OFF  - Turn LED off
-  TOGGLE   - Toggle LED state
-  STATUS   - Check LED state
-  HELP     - Show this help
+### Usage
+
+```bash
+# Connect via serial terminal
+screen /dev/ttyACM0 115200  # Linux/Mac
+# Or use PuTTY on Windows: COM3, 115200 baud
+
+# Example session:
+> STATUS
+STM32F446RE UART CLI
+SYSCLK: 16 MHz
+UART: 115200 baud
 
 > LED ON
-LED is now ON
+LED: ON
 
-> STATUS
-LED is currently: ON
+> ECHO Hello Embedded
+Hello Embedded
 
-> TOGGLE
-LED toggled
-
-> STATUS
-LED is currently: OFF
-
-> LED OFF
-LED is now OFF
+> LED TOGGLE
+LED: OFF
 ```
 
-## Key Implementation Details
-- **UART:** Polling-based character reception using USART2->DR register
-- **GPIO:** Direct register manipulation (ODR, BSRR) for LED control
-- **Command Parsing:** String comparison using strcmp for command identification
-- **Clock Configuration:** System clock and peripheral clocks configured via RCC
-- **No HAL:** Complete bare-metal implementation for better understanding of hardware
+## 📚 What I Learned
 
-## Technical Highlights
-- Direct peripheral register access (RCC, GPIO, USART)
-- Efficient bit manipulation for GPIO control
-- Robust command buffer handling
-- Clean separation of UART and GPIO logic
-- Professional command-line interface pattern
+**Register-Level Programming:**
+- Configuring GPIO alternate functions (AFR registers)
+- UART baud rate calculation from APB clock
+- Reading STM32 reference manual (RM0390) for register details
 
-## Project Structure
-```
-├── Core/
-│   ├── Src/
-│   │   └── main.c          # Main application and CLI logic
-│   └── Inc/
-│       └── main.h          # Function prototypes and defines
-├── Drivers/
-│   └── CMSIS/              # ARM CMSIS headers
-└── README.md
-```
+**Interrupt Handling:**
+- NVIC priority configuration
+- ISR flag clearing (critical to prevent re-entry)
+- Volatile variables for ISR-to-main communication
 
-## Future Improvements
-- [ ] Non-blocking BLINK command using hardware timers (TIM2)
-- [ ] Interrupt-driven UART reception (RXNE interrupt)
-- [ ] DMA for efficient UART data transfer
-- [ ] State machine for complex LED patterns
-- [ ] Command history with arrow key navigation
-- [ ] Multiple LED control
-- [ ] PWM-based LED brightness control
+**Data Structures:**
+- Circular buffer implementation (modulo arithmetic)
+- String parsing without stdlib (custom tokenizer)
 
-## Learning Outcomes
-This project demonstrates:
-- STM32 peripheral initialization without HAL
-- UART communication protocol implementation
-- GPIO register manipulation
-- String parsing and command handling
-- Firmware design patterns for CLI applications
+**Debugging:**
+- Using GDB with OpenOCD for live debugging
+- Understanding why missing `volatile` causes bugs
+- ST-Link SWD vs UART debugging trade-offs
 
-## Author
-**Adarsha Udupa**  
-Undergraduate Engineering Student  
-Focus: Embedded Systems & Firmware Engineering
+## 🐛 Known Issues
 
-## License
-MIT License - Feel free to use and modify for educational purposes.
+- [ ] BRR calculation was hardcoded in early commits (fixed)
+- [ ] TX is blocking (interrupt-driven TX planned for v2)
+- [ ] No command history (up/down arrow navigation)
+- [ ] No backspace handling in echo command
+
+## 🗺️ Roadmap
+
+- [ ] **Week 1:** Add TIM2 timer interrupt for non-blocking BLINK command
+- [ ] **Week 2-3:** I2C driver + BMP280 sensor integration
+- [ ] **Week 4:** State machine for sensor polling
+- [ ] **Week 5:** DMA-based TX for high-throughput logging
+
+## 📖 Documentation
+
+See `docs/` folder for detailed learning notes and register explanations.
+
+## 📄 License
+
+MIT License - See [LICENSE](LICENSE) file
+
+## 🙏 References
+
+- [STM32F446xx Reference Manual (RM0390)](https://www.st.com/resource/en/reference_manual/rm0390-stm32f446xx-advanced-armbased-32bit-mcus-stmicroelectronics.pdf)
+- [STM32F446xC/E Datasheet](https://www.st.com/resource/en/datasheet/stm32f446re.pdf)
+- Fastbit Embedded Brain Academy (YouTube)
 
 ---
 
-*Built as part of STM32 bare-metal learning journey focusing on firmware fundamentals.*
+**Built from scratch with no HAL.** Part of my embedded systems learning journey.
+
+*Questions? Open an issue or reach out via [LinkedIn](https://linkedin.com/in/adarsha-udupa-baikady-327a54219)*
