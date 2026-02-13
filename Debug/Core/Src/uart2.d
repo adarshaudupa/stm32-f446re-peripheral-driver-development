@@ -1,4 +1,4 @@
-Core/Src/uart_ref.o: ../Core/Src/uart_ref.c ../Core/Inc/uart.h \
+Core/Src/uart2.o: ../Core/Src/uart2.c ../Core/Inc/uart.h \
  ../Drivers/CMSIS/Device/ST/STM32F4xx/Include/stm32f4xx.h \
  ../Drivers/CMSIS/Device/ST/STM32F4xx/Include/stm32f446xx.h \
  ../Drivers/CMSIS/Include/core_cm4.h \

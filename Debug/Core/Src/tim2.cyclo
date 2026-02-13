@@ -1,0 +1,6 @@
+../Drivers/CMSIS/Include/core_cm4.h:1684:22:__NVIC_EnableIRQ	2
+../Drivers/CMSIS/Include/core_cm4.h:1814:22:__NVIC_SetPriority	2
+../Core/Src/tim2.c:11:6:timer_start	1
+../Core/Src/tim2.c:15:6:timer_stop	1
+../Core/Src/tim2.c:21:6:TIM2_Init	1
+../Core/Src/tim2.c:40:6:TIM2_IRQHandler	3

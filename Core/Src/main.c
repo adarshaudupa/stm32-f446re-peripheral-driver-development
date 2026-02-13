@@ -1,16 +1,28 @@
 #include "stm32f4xx.h"
 #include "uart.h"
+#include "tim2.h"
 #include <string.h>
 #define CMD_BUFFER_SIZE 32
+
+volatile led_state_t led_state = LED_MANUAL_OFF;
+
 
 char cmd_buffer[CMD_BUFFER_SIZE];
 uint8_t cmd_index = 0;
 
 
 int main(void) {
+
+	// Enable GPIOA clock (AHB1 bus, bit 0)
+	RCC->AHB1ENR |= (1<<0);
+	GPIOA->MODER &= ~(3<<10);
+	GPIOA->MODER |= (1<<10);
+
+    // Initialize UART2
     UART2_Init(9600);
-    GPIOA->MODER &= ~(3<<10); //clear PA5 bit
-    GPIOA->MODER |= (1<<10); //set PA5 in output mode
+    // Initialize TIM2 (but don't start it)
+    TIM2_Init();
+    timer_stop();  // Make sure it's stopped initially
     UART2_SendString("---STM32 CLI---\r\n");
     UART2_SendString("Type HELP for commands\r\n\r\n");
     UART2_SendString("> ");
@@ -28,24 +40,29 @@ int main(void) {
     		 UART2_SendString("Available commands:\r\n");
     		 UART2_SendString("  LED ON   - Turn LED on\r\n");
     		 UART2_SendString("  LED OFF  - Turn LED off\r\n");
-    		 UART2_SendString("  TOGGLE   - Toggle LED state\r\n");
+    		 UART2_SendString("  BLINK    - Blink LED at 1Hz\r\n");
     		 UART2_SendString("  STATUS   - Check LED state\r\n");
     		 UART2_SendString("  HELP     - Show this help\r\n");
     		}
     		 else if(strcmp(cmd_buffer, "LED ON")==0)
 			 {
+    		  timer_stop();
+    		  led_state = LED_MANUAL_ON;
 			  GPIOA->ODR |= (1<<5);
 			  UART2_SendString("LED turned ON\r\n");
 			 }
 			 else if(strcmp(cmd_buffer,"LED OFF")==0)
 			 {
+			  timer_stop();
+			  led_state = LED_MANUAL_OFF;
 			  GPIOA->ODR &= ~(1<<5);
 			  UART2_SendString("LED turned OFF\r\n");
 			 }
-			 else if(strcmp(cmd_buffer,"TOGGLE")==0)
+			 else if(strcmp(cmd_buffer,"BLINK")==0)
 			 {
-			  GPIOA->ODR ^= (1<<5);
-			  UART2_SendString("LED toggled\r\n");
+			  led_state = LED_AUTO_BLINK;
+			  timer_start();
+			  UART2_SendString("LED auto-blinking at 1 Hz\r\n");
 			 }
 			 else if(strcmp(cmd_buffer,"STATUS")==0)
 			 {
