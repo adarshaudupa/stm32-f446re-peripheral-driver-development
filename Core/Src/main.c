@@ -1,7 +1,8 @@
+#include <stdlib.h>
+#include "adc1.h"
 #include "stm32f4xx.h"
-#include "uart.h"
 #include "tim2.h"
-#include <string.h>
+#include "uart2.h"
 #define CMD_BUFFER_SIZE 32
 
 volatile led_state_t led_state = LED_MANUAL_OFF;
@@ -10,13 +11,13 @@ volatile led_state_t led_state = LED_MANUAL_OFF;
 char cmd_buffer[CMD_BUFFER_SIZE];
 uint8_t cmd_index = 0;
 
-
 int main(void) {
 
 	// Enable GPIOA clock (AHB1 bus, bit 0)
 	RCC->AHB1ENR |= (1<<0);
 	GPIOA->MODER &= ~(3<<10);
 	GPIOA->MODER |= (1<<10);
+    ADC1_Init();
 
     // Initialize UART2
     UART2_Init(9600);

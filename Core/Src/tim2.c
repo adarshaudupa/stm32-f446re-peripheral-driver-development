@@ -8,6 +8,9 @@
 #include "stm32f446xx.h"
 #include "tim2.h"
 
+volatile uint8_t tim2_flag = 0;
+
+
 void timer_start(void) {
     TIM2->CR1 |= (1 << 0);
 }
@@ -40,7 +43,8 @@ void TIM2_Init(void) {
 void TIM2_IRQHandler(void) {
     if (TIM2->SR & (1 << 0)) {  // Check UIF flag
         TIM2->SR &= ~(1 << 0);   // Clear UIF flag
-
+        // Assuming current ISR toggles LED
+        tim2_flag = 1;
         if (led_state == LED_AUTO_BLINK) {
             GPIOA->ODR ^= (1 << 5);
         }

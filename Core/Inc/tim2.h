@@ -9,6 +9,8 @@ typedef enum {
 } led_state_t;
 
 extern volatile led_state_t led_state;
+extern volatile uint8_t tim2_flag;
+
 
 void TIM2_Init(void);
 void timer_start(void);
