@@ -39,17 +39,15 @@ void TIM2_Init(void) {
     NVIC_SetPriority(TIM2_IRQn, 1);  // Lower priority number = higher priority
 }
 
-
-void TIM2_IRQHandler(void) {
-    if (TIM2->SR & (1 << 0)) {  // Check UIF flag
-        TIM2->SR &= ~(1 << 0);   // Clear UIF flag
-        // Assuming current ISR toggles LED
+void TIM2_IRQHandler(void)
+{
+    if (TIM2->SR & (1<<0)) {
+        TIM2->SR &= ~(1<<0);
         tim2_flag = 1;
-        if (led_state == LED_AUTO_BLINK) {
-            GPIOA->ODR ^= (1 << 5);
-        }
     }
 }
+
+
 
 
 

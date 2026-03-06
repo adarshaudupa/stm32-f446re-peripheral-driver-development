@@ -1,48 +1,71 @@
 #include "stm32f4xx.h"
-#include "gpio.h"
 #include "uart2.h"
-#include "tim2.h"
+#include "i2c1.h"
+#include "gpio.h"
 #include "adc1.h"
+#include "tim2.h"
 #include <stdint.h>
 
-extern volatile uint8_t tim2_flag;
-
-static void uint16_to_str(uint16_t val, char *buf) {
+void uint16_to_string(uint16_t num, char *str)
+{
     int i = 0;
-    if (val == 0) { buf[0] = '0'; buf[1] = '\0'; return; }
-    while (val > 0) { buf[i++] = '0' + (val % 10); val /= 10; }
-    buf[i] = '\0';
+
+    if (num == 0) {
+        str[0] = '0';
+        str[1] = '\0';
+        return;
+    }
+
+    while (num > 0) {
+        str[i++] = (num % 10) + '0';
+        num /= 10;
+    }
+
+    str[i] = '\0';
+
     // reverse
-    for (int a = 0, b = i-1; a < b; a++, b--) {
-        char t = buf[a]; buf[a] = buf[b]; buf[b] = t;
+    for (int j = 0; j < i / 2; j++) {
+        char tmp = str[j];
+        str[j] = str[i - 1 - j];
+        str[i - 1 - j] = tmp;
     }
 }
 
-int main(void) {
-    PA5_Init();
-    PC13_Init();
-    UART2_Init(115200);
-    TIM2_Init();
-    ADC1_Init();
 
-    UART2_SendString("Peripheral driver test\r\n");
+int main(void)
+{
+   UART2_Init();
+   PA5_Init();
+   TIM2_Init();
+   ADC1_Init();
+   I2C1_Init();
+   uint8_t id = 0;
 
-    while (1) {
-        if (tim2_flag) {
-            tim2_flag = 0;
+   id = I2C1_ReadRegister(0x76, 0xD0);
+   if(id == 0xFF)
+   {
+	UART2_SendString("Sensor Read is okay\r\n");
+   }
+   else
+	   UART2_SendString("Sensor Read fail\r\n");
 
-            ADC1->CR2 |= (1 << 30);
-            while (!(ADC1->SR & (1 << 1)));
-            uint16_t adc_val = ADC1->DR;
+   UART2_SendString("STM32 Peripheral Demo\r\n");
+    while (1)
+    {
+     if(tim2_flag)
+     {
+       tim2_flag = 0;
+       uint16_t adc = ADC1_Read();
+          if(adc>2095)
+       	 LED_ON();
+          else
+       	   LED_OFF();
 
-            char buf[8];
-            uint16_to_str(adc_val, buf);
-            UART2_SendString("ADC: ");
-            UART2_SendString(buf);
-            UART2_SendString("\r\n");
-
-            if (adc_val > 2000) LED_On();
-            else                LED_Off();
-        }
+          char buff[16];
+          uint16_to_string(adc, buff);
+          UART2_SendString("ADC = ");
+          UART2_SendString(buff);
+          UART2_SendString("\r\n");
+     }
     }
 }
