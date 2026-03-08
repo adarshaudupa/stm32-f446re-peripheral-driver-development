@@ -1,352 +1,468 @@
 # STM32F446RE Peripheral Driver Development
 
-Bare-metal register-level drivers for STM32F446RE Nucleo board. Built to understand peripheral timing, interrupt-driven architecture, and multi-peripheral integration without HAL abstractions.
+**Bare-metal register-level peripheral drivers for STM32F446RE Nucleo board**
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 ---
 
-## Overview
+##  Overview
 
-This repository contains **from-scratch drivers** for STM32F446RE peripherals, written directly against RM0390 register definitions. Focus areas:
+This repository is a **driver laboratory** for learning and developing bare-metal peripheral drivers for the STM32F446RE microcontroller. Each peripheral (GPIO, UART, TIM, ADC, I2C) is implemented from first principles using direct register access—no HAL, no CubeMX-generated code, just reference manual and determination.
 
-- **Interrupt-driven UART** (TX/RX with circular buffer)
-- **GPIO** (LED control, button input)
-- **TIM2** (periodic interrupts for task scheduling)
-- **ADC1** (single-channel analog reads)
-- **I2C1** (master mode, single/multi-byte transactions)
+**Purpose:** Build reusable, well-understood driver modules and timing intuition for future application projects (IMU-based pothole detection, RC car firmware, accident detection systems).
 
-Primary goal: **Learn how microcontroller peripherals work at the hardware level**, not just call library functions.
-
----
-
-## Features
-
-### UART2 (Interrupt-Driven)
-
-- **TX**: Blocking write with TXE flag polling
-- **RX**: Interrupt-driven with 64-byte circular buffer
-- **ISR Design**: Minimal latency—ISR only writes to buffer and sets flag; main loop processes data
-- **Configuration**: 9600 baud (runtime-configurable via BRR calculation from APB1 clock)
-
-**Key Learning**: Understanding `RXNE` interrupt timing, SR flag clearing sequence, and why ISRs must be fast.
-
-### GPIO
-
-- **LED Control**: PA5 (onboard LED) with ON/OFF/TOGGLE functions
-- **Button Input**: PC13 (onboard user button) with polling
-- **Mental Model**: Direct register manipulation (MODER, ODR, IDR) instead of HAL wrappers
-
-### TIM2 (Non-Blocking Timer)
-
-- **Configuration**: PSC/ARR calculated from APB1 clock for desired update frequency
-- **Usage Pattern**: Timer ISR sets flag → main loop checks flag → task executes
-- **Why This Matters**: Moves from blocking `for` loops to event-driven architecture
-
-**Implementation Note**: Initial version assumed 16 MHz APB1; corrected after discovering actual clock = 45 MHz (see "Critical Bugs Fixed" below).
-
-### ADC1 (Analog-to-Digital Converter)
-
-- **Single-Channel Polling**: PA0 → 12-bit value (0–4095)
-- **Integration**: ADC reads triggered by TIM2 flag for periodic sampling
-- **Use Case**: Continuous analog monitoring with UART streaming
-
-### I2C1 (Master Mode)
-
-- **Physical Setup**: PB8 (SCL), PB9 (SDA), configured as open-drain with internal pull-ups
-- **Transactions Implemented**:
-  - `I2C1_ReadRegister()`: Single-byte read (START → addr+W → reg → repeated START → addr+R → NACK → STOP)
-  - `I2C1_ReadMulti()`: Multi-byte read with correct ACK/NACK sequencing
-- **Target Device**: BME280 (I2C address 0x76, WHO_AM_I register 0xD0)
-
-**Status**: Basic transaction sequence works; debugging ongoing for sensor-specific timing issues.
+**Philosophy:** 
+- Understand hardware at the lowest level before abstracting
+- Every line of code maps to a specific register bit in RM0390
+- Clean, modular architecture that scales to production firmware
 
 ---
 
-## Architecture Decisions
+##  Current Implementation Status
 
-### 1. Interrupt-Driven vs. Polling
+###  Implemented
 
-| Peripheral | Strategy | Reason |
-|-----------|----------|--------|
-| UART RX | **Interrupt** | CPU-free operation; data captured immediately |
-| UART TX | **Polling** | Simple; TX is fast enough to block briefly |
-| TIM2 | **Interrupt** | Generates periodic events without CPU burn |
-| ADC | **Polling** | Single conversion is fast; no need for ISR overhead |
-| I2C | **Polling** | Complex state machine; easier to debug with explicit waits |
+| Peripheral | Status | Features |
+|------------|--------|----------|
+| **GPIO** |  Complete | Push-pull/open-drain output, pull-up/down input, BSRR atomic writes |
+| **UART2** |  Complete | Interrupt-driven RX with circular buffer, polling TX, manual BRR calculation |
+| **TIM2** |  Complete | Periodic interrupts (1 Hz), runtime ARR modification, LED state machine |
+| **ADC1** |  Complete | Single-channel polling, software-triggered, 12-bit resolution |
 
-### 2. Circular Buffer for UART RX
+###  In Progress
 
-- **Size**: 64 bytes (tuned for expected message lengths)
-- **ISR Role**: Write byte to buffer, increment head, return immediately
-- **Main Loop Role**: Check tail != head, read byte, increment tail
-- **Overflow Handling**: Currently wraps silently (no overflow detection—acknowledged limitation)
+| Peripheral | Status | Target |
+|------------|--------|--------|
+| **ADC1 + DMA** |  Planned | Circular buffer, timer-triggered, ping-pong processing |
+| **I2C1** |  Next | 400 kHz fast mode, LSM6DS3TR-C IMU communication |
+| **Clock Tree** |  Next | Dynamic frequency calculation helpers (`get_apb1_freq_hz()`) |
 
-### 3. Clock Awareness
+###  Future Work
 
-**Critical Issue Discovered**: Peripheral timing registers (BRR, PSC/ARR, I2C CCR) depend on **actual bus clock**, not assumed values.
-
-**Solution in Progress**:
-- Implement `get_apb1_freq_hz()` to read `RCC->CFGR` + prescaler tables at runtime
-- Use computed frequency for all peripheral init functions
-- No more hard-coded "16 MHz" assumptions
+- SPI1 (external flash/SD card)
+- DMA for UART TX
+- External interrupts (EXTI) for button debounce
+- Low-power modes (STOP/STANDBY)
 
 ---
 
-## Project Structure
+##  Hardware Requirements
+
+| Component | Specification |
+|-----------|--------------|
+| **Board** | STM32 Nucleo-F446RE |
+| **MCU** | STM32F446RET6 (ARM Cortex-M4 @ 180 MHz max, 512 KB Flash, 128 KB SRAM) |
+| **Onboard LED** | PA5 (LD2) |
+| **User Button** | PC13 (B1, active-low with external pull-up) |
+| **ADC Input** | PA0 (ADC1_IN0, test with potentiometer or jumper wires) |
+| **I2C (Planned)** | PB8 (SCL), PB9 (SDA) for LSM6DS3TR-C IMU |
+
+**External Hardware (Optional):**
+- Potentiometer on PA0 for ADC testing
+- LSM6DS3TR-C breakout board for I2C testing
+- Logic analyzer for protocol debugging
+
+---
+
+##  Quick Start
+
+### Prerequisites
+
+- **IDE:** STM32CubeIDE (recommended) or ARM GCC toolchain
+- **Debugger:** ST-LINK/V2-1 (integrated on Nucleo)
+- **Terminal:** PuTTY, minicom, or `screen` for UART debugging
+- **Documentation:** [STM32F446xx Reference Manual (RM0390)](https://www.st.com/resource/en/reference_manual/rm0390-stm32f446xx-advanced-armbased-32bit-mcus-stmicroelectronics.pdf)
+
+### Build and Flash
+
+```bash
+# Clone repository
+git clone https://github.com/adarshaudupa/stm32-f446re-peripheral-driver-development.git
+cd stm32-f446re-peripheral-driver-development
+
+# Option 1: STM32CubeIDE
+# File → Import → Existing Projects into Workspace
+# Select directory → Build (Ctrl+B) → Debug (F11)
+
+# Option 2: Command Line (if using Makefile)
+make clean && make
+st-flash write build/main.bin 0x8000000
+```
+
+---
+
+##  Project Structure
 
 ```
 stm32-f446re-peripheral-driver-development/
-├── Src/
-│   ├── main.c          # Application logic (UART echo, ADC print, I2C test)
-│   ├── uart2.c         # UART driver (TX/RX + circular buffer)
-│   ├── gpio.c          # LED + button control
-│   ├── tim2.c          # Timer init + ISR
-│   ├── adc1.c          # ADC init + read function
-│   └── i2c1.c          # I2C master driver
-├── Inc/
-│   ├── uart2.h
-│   ├── gpio.h
-│   ├── tim2.h
-│   ├── adc1.h
-│   └── i2c1.h
+├── Core/
+│   ├── Inc/
+│   │   ├── main.h
+│   │   ├── gpio.h          # GPIO driver header
+│   │   ├── uart2.h         # USART2 driver header
+│   │   ├── tim2.h          # TIM2 driver header
+│   │   ├── adc1.h          # ADC1 driver header
+│   │   └── i2c1.h          # I2C1 driver (planned)
+│   └── Src/
+│       ├── main.c          # Test applications and integration
+│       ├── gpio.c          # GPIO implementation
+│       ├── uart2.c         # USART2 implementation + ISR
+│       ├── tim2.c          # TIM2 implementation + ISR
+│       ├── adc1.c          # ADC1 implementation
+│       └── syscalls.c      # Newlib stubs
+├── Drivers/
+│   └── CMSIS/              # ARM CMSIS headers (vendor, unchanged)
+├── Debug/                  # Build artifacts (gitignored)
+├── .gitignore
+├── LICENSE
 └── README.md
 ```
 
-**Naming Convention**: Peripheral names match hardware instance (UART2, TIM2, I2C1) for clarity when debugging against reference manual.
+**Design Principle:** Each peripheral lives in its own `.c/.h` pair. `main.c` only initializes drivers and runs test applications. Clean separation for easy reuse in future projects.
 
 ---
 
-## Technical Highlights
+##  Technical Deep Dive
 
-### 1. Register-Level Configuration
+### 1. GPIO Driver
 
-**Example: UART2 GPIO Alternate Function Setup**
+**Capabilities:**
+- Configure pins as input (floating, pull-up, pull-down) or output (push-pull, open-drain)
+- Atomic bit manipulation using BSRR (avoid read-modify-write hazards)
+- LED control (PA5) and button reading (PC13)
 
+**Key Registers:**
 ```c
-// PA2 (TX), PA3 (RX) → AF mode
-GPIOA->MODER &= ~((3<<4) | (3<<6));
-GPIOA->MODER |= (2<<4) | (2<<6);
+// Example: Configure PA5 as push-pull output
+GPIOA->MODER &= ~(3 << 10);   // Clear mode bits [11:10]
+GPIOA->MODER |= (1 << 10);    // Set to output mode (0b01)
+GPIOA->OTYPER &= ~(1 << 5);   // Push-pull (default)
 
-// Select AF7 (USART2)
-GPIOA->AFR[0] &= ~((0xF<<8) | (0xF<<12));
-GPIOA->AFR[0] |= (7<<8) | (7<<12);
+// Atomic LED toggle using BSRR
+GPIOA->ODR ^= (1 << 5);       // Read-modify-write (avoid in ISRs)
+// OR safer:
+if (GPIOA->ODR & (1 << 5))
+    GPIOA->BSRR = (1 << 21);  // Reset bit [BR5]
+else
+    GPIOA->BSRR = (1 << 5);   // Set bit [BS5]
 ```
 
-**Why This Matters**: Understanding mode registers, alternate function routing, and pin multiplexing is **essential for firmware roles** where HAL isn't available or suitable.
+**Reference:** RM0390 Section 8 (GPIO)
 
-### 2. I2C Transaction Sequencing
+---
 
-**Single-Byte Register Read Pattern**:
+### 2. UART2 Driver
 
-1. START → wait `SB` flag
-2. Send slave address (write) → wait `ADDR` → clear `ADDR` by reading `SR2`
-3. Send register address → wait `TXE`, then `BTF`
-4. Repeated START → wait `SB`
-5. Send slave address (read) → wait `ADDR`
-6. **Disable ACK** → clear `ADDR` → **generate STOP**
-7. Wait `RXNE` → read `DR`
+**Capabilities:**
+- Interrupt-driven RX with 256-byte circular buffer
+- Blocking TX (optimized for debug logging)
+- Manual baud rate calculation from APB1 clock
+- Echo, backspace handling for CLI integration
 
-**Lesson Learned**: I2C flag clearing sequence is order-sensitive. Missing `SR2` read = `ADDR` flag stays set = transaction hangs.
-
-### 3. Debugging with Instrumentation
-
-**Pattern Used**:
-
+**Initialization Sequence:**
 ```c
-UART2_SendString("Step 1: START\r\n");
-I2C1->CR1 |= (1 << 8);
+// 1. Enable clocks
+RCC->AHB1ENR |= (1 << 0);   // GPIOA
+RCC->APB1ENR |= (1 << 17);  // USART2
 
-UART2_SendString("Step 2: Wait SB\r\n");
-while (!(I2C1->SR1 & (1 << 0)));
+// 2. Configure PA2 (TX), PA3 (RX) as AF7
+GPIOA->MODER &= ~((3 << 4) | (3 << 6));
+GPIOA->MODER |= (2 << 4) | (2 << 6);     // AF mode
+GPIOA->AFR[0] &= ~((0xF << 8) | (0xF << 12));
+GPIOA->AFR[0] |= (7 << 8) | (7 << 12);   // AF7 = USART2
 
-UART2_SendString("Step 3: SB set\r\n");
+// 3. Configure baud rate
+// BRR = fPCLK / (16 × baud)
+// APB1 = 16 MHz, baud = 115200 → BRR ≈ 8.68 → 0x8B
+USART2->BRR = 0x8B;
+
+// 4. Enable USART
+USART2->CR1 |= (1 << 13) | (1 << 3) | (1 << 2);  // UE, TE, RE
+USART2->CR1 |= (1 << 5);                          // RXNEIE
+
+// 5. Enable NVIC
+NVIC_EnableIRQ(USART2_IRQn);
 ```
 
-**Impact**: Pinpointed exact hang location (START never generating `SB` flag) → diagnosed root cause (incorrect `I2C->CR2` value due to wrong APB1 frequency assumption).
-
-### 4. Timer Math
-
-**Formula**:
-
-```
-f_update = f_apb1 / ((PSC + 1) * (ARR + 1))
-```
-
-**Example (1 Hz from 16 MHz APB1)**:
-
+**ISR Pattern:**
 ```c
-TIM2->PSC = 15999;  // PSC+1 = 16000
-TIM2->ARR = 999;    // ARR+1 = 1000
-// Result: 16,000,000 / (16000 * 1000) = 1 Hz ✓
+void USART2_IRQHandler(void) {
+    if (USART2->SR & (1 << 5)) {  // RXNE set?
+        char byte = USART2->DR;   // Reading DR clears RXNE
+        rx_buffer[rx_head++] = byte;
+        rx_head %= RX_BUFFER_SIZE;
+    }
+}
 ```
 
-**Critical Dependency**: This only works if `f_apb1` is actually 16 MHz. If APB1 = 45 MHz (as discovered during I2C debug), math breaks → timer runs at wrong frequency.
+**Reference:** RM0390 Section 30 (USART)
 
 ---
 
-## Critical Bugs Fixed
+### 3. TIM2 Driver
 
-### Bug 1: I2C Peripheral Clock Mismatch
+**Capabilities:**
+- Generate periodic interrupts (configurable frequency via PSC/ARR)
+- Runtime frequency modification (change ARR on-the-fly)
+- LED state machine integration (auto-blink mode)
 
-**Symptom**: I2C transactions hung at START condition; `SB` flag never set.
+**Timer Frequency Calculation:**
+```
+Update frequency = Timer_Clock / ((PSC + 1) × (ARR + 1))
 
-**Root Cause**:
+Example for 1 Hz with APB1 = 84 MHz (after PLL):
+PSC = 8399, ARR = 9999
+f_update = 84000000 / (8400 × 10000) = 1 Hz
+```
 
+**Initialization:**
 ```c
-I2C1->CR2 = 16;  // Hard-coded "16 MHz"
+// 1. Enable TIM2 clock (APB1)
+RCC->APB1ENR |= (1 << 0);
+
+// 2. Configure prescaler and auto-reload
+TIM2->PSC = 8399;   // (PSC + 1) = 8400
+TIM2->ARR = 9999;   // (ARR + 1) = 10000
+
+// 3. Enable update interrupt
+TIM2->DIER |= (1 << 0);  // UIE
+NVIC_EnableIRQ(TIM2_IRQn);
+
+// 4. Start timer
+TIM2->CR1 |= (1 << 0);   // CEN
 ```
 
-Actual APB1 clock = **45 MHz** (configured by bootloader).
-
-**Impact**: `CR2` value controls internal I2C timing calculations. Wrong value → START condition never generated correctly.
-
-**Fix (In Progress)**:
-
+**ISR:**
 ```c
-uint32_t apb1_freq = get_apb1_freq_hz();  // Read from RCC->CFGR
-I2C1->CR2 = apb1_freq / 1000000;          // Set CR2 to actual APB1 MHz
-I2C1->CCR = apb1_freq / (100000 * 2);     // 100 kHz I2C
-I2C1->TRISE = (apb1_freq / 1000000) + 1;
+void TIM2_IRQHandler(void) {
+    if (TIM2->SR & (1 << 0)) {  // UIF set?
+        TIM2->SR &= ~(1 << 0);  // Clear UIF (mandatory!)
+        GPIOA->ODR ^= (1 << 5); // Toggle LED
+    }
+}
 ```
 
-**Lesson**: **Never assume peripheral clocks.** Always derive from `RCC->CFGR` at runtime.
+**Reference:** RM0390 Section 18 (General-purpose timers)
 
-### Bug 2: UART BRR Calculated for Wrong Clock
+---
 
-**Symptom**: UART worked at 9600 baud "by luck" because default HSI = 16 MHz matched assumption.
+### 4. ADC1 Driver
 
-**Hidden Risk**: If system clock changes (PLL, HSE, different prescaler), baud rate breaks.
+**Capabilities:**
+- Single-channel conversion (PA0 = ADC1_IN0)
+- 12-bit resolution (0–4095 for 0–3.3V)
+- Software-triggered, polling-based (EOC flag)
+- Voltage-to-LED threshold logic
 
-**Fix**:
-
+**Initialization:**
 ```c
-uint32_t apb1_freq = get_apb1_freq_hz();
-USART2->BRR = apb1_freq / baudrate;  // Correct for any APB1 config
+// 1. Enable clocks
+RCC->AHB1ENR |= (1 << 0);   // GPIOA
+RCC->APB2ENR |= (1 << 8);   // ADC1
+
+// 2. Configure PA0 as analog input
+GPIOA->MODER |= (3 << 0);   // Analog mode (0b11)
+
+// 3. Configure ADC
+ADC1->CR2 &= ~(1 << 11);    // Right-aligned data
+ADC1->SQR1 &= ~(0xF << 20); // 1 conversion in sequence
+ADC1->SQR3 &= ~(0x1F << 0); // Channel 0 in SQ1
+ADC1->SMPR2 |= (7 << 0);    // 480 cycles sampling time
+
+// 4. Enable ADC
+ADC1->CR2 |= (1 << 0);      // ADON
+for (volatile int i = 0; i < 1000; i++);  // Stabilization delay
 ```
 
----
+**Conversion Loop:**
+```c
+while (1) {
+    ADC1->CR2 |= (1 << 30);         // SWSTART
+    while (!(ADC1->SR & (1 << 1))); // Wait for EOC
+    uint16_t adc_value = ADC1->DR;  // Read result (clears EOC)
+    
+    // Use value (print, threshold check, etc.)
+    if (adc_value > 2000) {
+        GPIOA->ODR |= (1 << 5);     // LED ON
+    } else {
+        GPIOA->ODR &= ~(1 << 5);    // LED OFF
+    }
+}
+```
 
-## Limitations / Next Steps
-
-### Current Limitations
-
-1. **No Timeouts**: All `while (!(flag))` loops hang forever if flag never sets → need timeout counters + error return codes.
-2. **No Error Handling**: Functions return raw data, not status codes (`I2C_OK`, `I2C_TIMEOUT`, `I2C_NACK`).
-3. **UART RX Overflow**: Circular buffer wraps silently if full; no overflow detection or notification.
-4. **I2C Clock Config Incomplete**: `get_apb1_freq_hz()` not yet implemented (scheduled for immediate next commit).
-5. **No Unit Tests**: Manual testing only via UART logs and LED observation.
-6. **ADC Single-Channel Only**: No multi-channel scanning, no DMA.
-
-### Next Steps
-
-1. **Fix I2C Clock Bug** (Today)
-   - Implement `get_apb1_freq_hz()` using `RCC->CFGR` + prescaler tables
-   - Update all peripheral inits to use computed frequencies
-   - Verify BME280 chip ID read (expect 0x60)
-
-2. **Add Robustness** (This Week)
-   - Timeout counters on all blocking waits
-   - Return status codes from I2C functions
-   - UART RX overflow flag
-
-3. **Sensor Integration** (Next Week)
-   - MPU6050 (6-axis IMU) over I2C
-   - Multi-byte register reads (accel/gyro data)
-   - Endianness handling for 16-bit signed values
-
-4. **Project Integration** (Weeks 2-3)
-   - Integrate into Creat-A-Thon 7.0 project (accident detection system)
-   - GPS module (UART RX parsing)
-   - ESP32 communication (UART TX)
+**Reference:** RM0390 Section 13 (ADC)
 
 ---
 
-## Build & Run
+##  Test Applications
 
-### Hardware
+### Test 1: TIM2 1 Hz Blink
+**File:** `main.c` (default test)
 
-- **Board**: STM32 Nucleo F446RE
-- **Debugger**: ST-LINK/V2-1 (onboard)
-- **UART**: PA2 (TX), PA3 (RX) → connect to USB-UART adapter at 9600 baud, 8N1
+**Behavior:**
+- TIM2 generates 1 Hz update interrupt
+- ISR toggles PA5 LED (on for 1s, off for 1s)
+- No busy-wait loops, CPU is free for other tasks
 
-### Toolchain
-
-- **Compiler**: `arm-none-eabi-gcc`
-- **Build System**: Makefile or STM32CubeIDE project
-- **Flashing**: `st-flash` or STM32CubeProgrammer
-
-### Quick Start
-
-1. Clone repo
-2. Open in STM32CubeIDE or build with Makefile
-3. Flash to Nucleo board via ST-LINK
-4. Connect UART2 (PA2/PA3) to serial terminal at 9600 baud
-5. Observe UART output:
-   - `"START\r\n"` on boot
-   - `"I2C init done\r\n"` after I2C peripheral enabled
-   - BME280 chip ID read result (currently debugging)
+**Purpose:** Verify timer configuration, PSC/ARR calculation, interrupt handling, ISR flag clearing
 
 ---
 
-## Key Learnings
+### Test 2: Button-Controlled Timer Speed
+**File:** `main.c` (variant)
 
-### 1. Clocks Are First-Class Configuration
+**Behavior:**
+- Main loop polls PC13 user button
+- Button pressed → TIM2->ARR = 4999 (2 Hz blink)
+- Button released → TIM2->ARR = 9999 (1 Hz blink)
 
-Peripheral timing registers are **functions of bus clocks**, not constants. Any driver that assumes a fixed clock frequency is **fragile and non-portable**.
-
-**Old Mindset**: "16 MHz is the clock."  
-**New Mindset**: "What is APB1 right now? Let me compute it from `RCC->CFGR`."
-
-### 2. ISRs Must Be Fast and Predictable
-
-**Pattern**:
-- ISR: Store data, set flag, return immediately
-- Main loop: Check flag, process data, clear flag
-
-**Anti-pattern**:
-- ISR: Call `printf()`, do string parsing, make decisions (= unpredictable latency)
-
-### 3. Debugging = Instrumentation Before Theory
-
-**Effective Debugging Flow**:
-1. Add UART prints between every major step
-2. Binary-search to find **exact line where code hangs**
-3. **Then** consult datasheet for that specific flag/register
-
-**Ineffective Flow**:
-1. Stare at code
-2. Re-read entire datasheet chapter
-3. Change random things
-4. Hope it works
-
-### 4. Multi-File Structure Scales
-
-Single `main.c` worked for GPIO blink. Does **not** work for 5+ peripherals.
-
-**Benefits of Separation**:
-- Easier to debug (isolate driver vs. application logic)
-- Reusable across projects
-- Cleaner git diffs
+**Purpose:** Demonstrate runtime timer reconfiguration, input reading, blocking polling trade-offs
 
 ---
 
-## Resources
+### Test 3: ADC Streaming Over UART
+**File:** `main.c` (variant)
 
-- **STM32F446RE Datasheet**: Pinouts, electrical specs
-- **RM0390 Reference Manual**: Register descriptions (UART, I2C, TIM, ADC, RCC chapters heavily used)
-- **ARM Cortex-M4 Generic User Guide**: Exception model, NVIC, interrupt priorities
-- **Debugging Logs**: See `docs/` folder for detailed I2C debug session notes
+**Behavior:**
+- Periodic ADC conversion on PA0
+- Convert `uint16_t` to ASCII string
+- Print value via UART2
+- LED ON if value > 2000, else OFF
+
+**Hardware Test:**
+```
+PA0 floating       → Random flickering values (noise)
+PA0 to GND         → Values near 0, LED OFF
+PA0 to 3.3V        → Values near 4095, LED ON
+PA0 to pot wiper   → Values change with pot, LED toggles at threshold
+```
+
+**Purpose:** Verify ADC calibration, UART printf integration, voltage mapping, threshold logic
 
 ---
 
-## Author Notes
+##  Learning Outcomes
 
-This repo represents **real learning progression**, not polished tutorial code. Some sections are clean (UART driver), others are mid-debug (I2C clock fix in progress).
+This repository demonstrates:
 
-**Philosophy**: Build → Break → Fix → Understand. The clock tree gap wasn't learned from a textbook; it was discovered through **failed I2C transactions and systematic debugging**.
+### Hardware Understanding
+- Clock tree architecture (AHB, APB1, APB2 buses)
+- Peripheral clock enable sequencing via RCC
+- GPIO alternate function mapping (AFRL/AFRH registers)
+- Prescaler and auto-reload calculations for timers
+- ADC sampling time vs. conversion accuracy trade-offs
 
-Current focus: Fix I2C clock bug, complete BME280 integration, then move to MPU6050 for Creat-A-Thon project.
+### Firmware Skills
+- Register-level peripheral initialization
+- NVIC interrupt priority and enable
+- ISR design patterns (flag clearing, volatility, atomicity)
+- Circular buffer implementation for UART RX
+- Avoiding read-modify-write hazards (BSRR vs. ODR)
+
+### Professional Practices
+- Modular driver architecture (separation of concerns)
+- CMSIS-compliant register access
+- Version control for embedded projects
+- Readable, maintainable low-level code
+- Reference manual navigation and bit-field interpretation
 
 ---
 
-**Last Updated**: March 5, 2026  
-**Status**: UART/GPIO/TIM2/ADC working; I2C debugging in progress (clock config fix scheduled today)
+##  Roadmap
+
+### Short-Term (Next 2 Weeks)
+- [ ] Implement dynamic clock frequency helpers (`get_apb1_freq_hz()`)
+- [ ] Refactor UART/TIM/ADC to use clock helpers instead of hardcoded values
+- [ ] I2C1 driver bring-up at 400 kHz
+- [ ] Read WHO_AM_I register from LSM6DS3TR-C IMU
+
+### Medium-Term (Next Month)
+- [ ] ADC1 + DMA circular buffer with ping-pong processing
+- [ ] Timer-triggered ADC (TIM2_TRGO → ADC1)
+- [ ] Basic accelerometer data acquisition and UART streaming
+- [ ] Simple impact detection algorithm (threshold + windowed variance)
+
+### Long-Term (Next 3 Months)
+- [ ] SPI driver for external flash/SD card logging
+- [ ] DMA for UART TX (non-blocking high-throughput logging)
+- [ ] State machine framework for application logic
+- [ ] Integration into RC car / pothole detection project
+- [ ] FreeRTOS port with task-based architecture
+
+---
+
+##  Known Issues
+
+| Issue | Impact | Status |
+|-------|--------|--------|
+| Clock frequency hardcoded to 16 MHz | Breaks if PLL enabled | Fix in progress |
+| ADC sampling time not optimized | Slower conversions than necessary | Low priority |
+| No DMA for UART TX | Blocking prints freeze main loop | Planned |
+| I2C driver missing | Can't talk to sensors yet | Next milestone |
+
+---
+
+##  References
+
+### Official Documentation
+- [STM32F446xx Reference Manual (RM0390)](https://www.st.com/resource/en/reference_manual/rm0390-stm32f446xx-advanced-armbased-32bit-mcus-stmicroelectronics.pdf) - **Primary resource**
+- [STM32F446RE Datasheet](https://www.st.com/resource/en/datasheet/stm32f446re.pdf)
+- [STM32 Nucleo-64 User Manual (UM1724)](https://www.st.com/resource/en/user_manual/um1724-stm32-nucleo64-boards-mb1136-stmicroelectronics.pdf)
+- [ARM Cortex-M4 Technical Reference Manual](https://developer.arm.com/documentation/100166/0001)
+
+### Learning Resources
+- *Mastering STM32* by Carmine Noviello
+- Fastbit Embedded Brain Academy (YouTube)
+- STM32 community forums and Discord servers
+
+---
+
+##  Contributing
+
+This is a personal learning repository, but feedback and improvements are welcome:
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/driver-xyz`)
+3. Commit with descriptive messages
+4. Push and open a Pull Request
+
+**Areas for contribution:**
+- Additional peripheral drivers (SPI, CAN, USB)
+- Bug fixes or optimization suggestions
+- Documentation improvements
+- Test application ideas
+
+---
+
+##  License
+
+MIT License - see [LICENSE](LICENSE) file for details.
+
+**TL;DR:** Free to use, modify, and distribute. Keep the copyright notice.
+
+---
+
+##  Author
+
+**Adarsha Udupa Baikady**  
+Undergraduate | Electronics & Instrumentation Engineering  
+Focus: Embedded Systems & Firmware Development
+
+- GitHub: [@adarshaudupa](https://github.com/adarshaudupa)
+- LinkedIn: [adarsha-udupa-baikady](https://www.linkedin.com/in/adarsha-udupa-baikady-327a54219)
+- Email: adarsha8505@gmail.com
+
+---
+
+##  Acknowledgments
+
+This project exists because of:
+- Direct mentorship and code reviews from embedded engineers
+- STM32 reference manual authors (the real MVPs)
+- The open-source embedded community
+- Countless late-night debugging sessions with logic analyzers
+
+---
+
+**No HAL, no shortcuts—just registers, determination, and a reference manual.**
