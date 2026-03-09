@@ -4,6 +4,7 @@
 #include "gpio.h"
 #include "adc1.h"
 #include "tim2.h"
+#include "clock.h"
 #include <stdint.h>
 
 void uint16_to_string(uint16_t num, char *str)
@@ -32,40 +33,43 @@ void uint16_to_string(uint16_t num, char *str)
 }
 
 
-int main(void)
-{
-   UART2_Init();
-   PA5_Init();
-   TIM2_Init();
-   ADC1_Init();
-   I2C1_Init();
-   uint8_t id = 0;
+static void uart_print_uint(const char *label, uint32_t value) {
+    char buf[16];
+    int idx = 0;
+    if (value == 0) {
+        buf[idx++] = '0';
+    } else {
+        char tmp[16];
+        int t = 0;
+        while (value > 0 && t < 16) {
+            tmp[t++] = '0' + (value % 10);
+            value /= 10;
+        }
+        while (t > 0) {
+            buf[idx++] = tmp[--t];
+        }
+    }
+    buf[idx] = '\0';
 
-   id = I2C1_ReadRegister(0x76, 0xD0);
-   if(id == 0xFF)
-   {
-	UART2_SendString("Sensor Read is okay\r\n");
-   }
-   else
-	   UART2_SendString("Sensor Read fail\r\n");
+    UART2_SendString(label);
+    UART2_SendString(buf);
+    UART2_SendString("\r\n");
+}
 
-   UART2_SendString("STM32 Peripheral Demo\r\n");
+int main(void) {
+    UART2_Init(115200);
+    PA5_Init();
+    TIM2_Init();
+    uint32_t cfgr = RCC->CFGR;
+    uint32_t sys  = get_sysclk_freq_hz();
+    uint32_t apb1 = get_apb1_freq_hz();
+
+    uart_print_uint("CFGR = ", cfgr);
+    uart_print_uint("SYS  = ", sys);
+    uart_print_uint("APB1 = ", apb1);
+
     while (1)
     {
-     if(tim2_flag)
-     {
-       tim2_flag = 0;
-       uint16_t adc = ADC1_Read();
-          if(adc>2095)
-       	 LED_ON();
-          else
-       	   LED_OFF();
-
-          char buff[16];
-          uint16_to_string(adc, buff);
-          UART2_SendString("ADC = ");
-          UART2_SendString(buff);
-          UART2_SendString("\r\n");
-     }
+    	timer_start();
     }
 }

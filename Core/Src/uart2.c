@@ -6,6 +6,7 @@
 
 #include "uart2.h"
 #include "stm32f4xx.h"
+#include "clock.h"
 
 // Circular Buffer for RX
 
@@ -15,7 +16,7 @@ volatile char rx_buffer[RX_BUFFER_SIZE];
 volatile uint8_t rx_head = 0;
 volatile uint8_t rx_tail = 0;
 
-void UART2_Init() {
+void UART2_Init(uint32_t baudrate) {
 
 	RCC->AHB1ENR |= (1<<0);
 	RCC->APB1ENR |= (1<<17); //Enable GPIOA Clock
@@ -28,7 +29,8 @@ void UART2_Init() {
 	// Formula: BRR = f_PCLK / (16 * baudrate)
 	// APB1 clock = 16 MHz (default)
 	// For 9600: BRR = 16000000 / (16 * 9600) = 104.166
-	USART2->BRR = 0x683;
+	uint32_t pclk1 = get_apb1_freq_hz();
+	USART2->BRR = pclk1 / baudrate;
 
 	USART2->CR1 = (1 << 13) | (1 << 3) | (1 << 2); //Enable UE(USART Enable), TE and RE
 	USART2->CR1 |= (1 << 5); //Enable RXNE interrupt
@@ -36,7 +38,7 @@ void UART2_Init() {
 	NVIC->ISER[1] |= (1 << 6);  // Enable USART2 interrupt in NVIC
 
 	    // Flush any garbage data
-	for (volatile int i = 0; i < 1000; i++);
+	for (volatile int i = 0; i < 1000; i++)
 	    if (USART2->SR & (1 << 5)) {
 	        volatile uint32_t temp = USART2->DR;
 	        (void)temp;
@@ -50,7 +52,7 @@ void UART2_SendChar(char ch) {
     USART2->DR = ch;
 }
 
-void UART2_SendString(char *str) {
+void UART2_SendString(const char *str) {
     while (*str) {
         UART2_SendChar(*str);  // Send current character
         str++;                 // Move to next character
