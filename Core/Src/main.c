@@ -68,8 +68,10 @@ int main(void) {
     uart_print_uint("SYS  = ", sys);
     uart_print_uint("APB1 = ", apb1);
 
+    timer_start();
+    
     while (1)
     {
-    	timer_start();
+
     }
 }
