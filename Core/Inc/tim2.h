@@ -15,6 +15,7 @@ extern volatile uint8_t tim2_flag;
 void TIM2_Init(void);
 void timer_start(void);
 void timer_stop(void);
+void TIM2_Init_1MHz(void);
 
 
 #endif

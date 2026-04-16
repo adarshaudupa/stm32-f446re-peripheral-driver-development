@@ -16,10 +16,10 @@ volatile char rx_buffer[RX_BUFFER_SIZE];
 volatile uint8_t rx_head = 0;
 volatile uint8_t rx_tail = 0;
 
-void UART2_Init(uint32_t baudrate) {
-
-	RCC->AHB1ENR |= (1<<0);
-	RCC->APB1ENR |= (1<<17); //Enable GPIOA Clock
+void UART2_Init(void)
+{
+	RCC->AHB1ENR |= (1<<0);  //Enable GPIOA Clock
+	RCC->APB1ENR |= (1<<17); //Enable USART2 Clock
 
 	GPIOA->MODER &= ~((3<<4) | (3<<6));
 	GPIOA->MODER |= (2<<4) | (2<<6); //Set PA2(TX) and PA3(RX) in AF Mode
@@ -29,8 +29,7 @@ void UART2_Init(uint32_t baudrate) {
 	// Formula: BRR = f_PCLK / (16 * baudrate)
 	// APB1 clock = 16 MHz (default)
 	// For 9600: BRR = 16000000 / (16 * 9600) = 104.166
-	uint32_t pclk1 = get_apb1_freq_hz();
-	USART2->BRR = pclk1 / baudrate;
+	USART2->BRR = 0x0683;
 
 	USART2->CR1 = (1 << 13) | (1 << 3) | (1 << 2); //Enable UE(USART Enable), TE and RE
 	USART2->CR1 |= (1 << 5); //Enable RXNE interrupt
@@ -43,6 +42,8 @@ void UART2_Init(uint32_t baudrate) {
 	        volatile uint32_t temp = USART2->DR;
 	        (void)temp;
 }
+    while (!(USART2->SR & (1 << 7)));
+        USART2->DR = 'U'; // sentinel character
 }
 
 void UART2_SendChar(char ch) {
@@ -121,4 +122,28 @@ void USART2_IRQHandler(void) {
             rx_head = 0;
         }
     }
+}
+
+void uart_print_uint(const char *label, uint32_t value)
+{
+    char buf[16];
+    int idx = 0;
+    if (value == 0) {
+        buf[idx++] = '0';
+    } else {
+        char tmp[16];
+        int t = 0;
+        while (value > 0 && t < 16) {
+            tmp[t++] = '0' + (value % 10);
+            value /= 10;
+        }
+        while (t > 0) {
+            buf[idx++] = tmp[--t];
+        }
+    }
+    buf[idx] = '\0';
+
+    UART2_SendString(label);
+    UART2_SendString(buf);
+    UART2_SendString("\r\n");
 }

@@ -7,69 +7,17 @@
 #include "clock.h"
 #include <stdint.h>
 
-void uint16_to_string(uint16_t num, char *str)
+
+int main(void)
 {
-    int i = 0;
+    UART2_Init();
+    I2C1_Init(100000);
+    UART2_SendString("I2C init done\r\n");
 
-    if (num == 0) {
-        str[0] = '0';
-        str[1] = '\0';
-        return;
-    }
+    uint8_t id = I2C1_ReadRegister(0x76, 0xD0);  // LSM6DS3: addr=0x76, WHO_AM_I reg=0xD0
+    uart_print_uint("WHO_AM_I = ", id);            // expect 0x60
 
-    while (num > 0) {
-        str[i++] = (num % 10) + '0';
-        num /= 10;
-    }
-
-    str[i] = '\0';
-
-    // reverse
-    for (int j = 0; j < i / 2; j++) {
-        char tmp = str[j];
-        str[j] = str[i - 1 - j];
-        str[i - 1 - j] = tmp;
-    }
+    while (1) {}
 }
 
 
-static void uart_print_uint(const char *label, uint32_t value) {
-    char buf[16];
-    int idx = 0;
-    if (value == 0) {
-        buf[idx++] = '0';
-    } else {
-        char tmp[16];
-        int t = 0;
-        while (value > 0 && t < 16) {
-            tmp[t++] = '0' + (value % 10);
-            value /= 10;
-        }
-        while (t > 0) {
-            buf[idx++] = tmp[--t];
-        }
-    }
-    buf[idx] = '\0';
-
-    UART2_SendString(label);
-    UART2_SendString(buf);
-    UART2_SendString("\r\n");
-}
-
-int main(void) {
-    UART2_Init(115200);
-    PA5_Init();
-    TIM2_Init();
-    uint32_t cfgr = RCC->CFGR;
-    uint32_t sys  = get_sysclk_freq_hz();
-    uint32_t apb1 = get_apb1_freq_hz();
-
-    uart_print_uint("CFGR = ", cfgr);
-    uart_print_uint("SYS  = ", sys);
-    uart_print_uint("APB1 = ", apb1);
-
-    while (1)
-    {
-    	timer_start();
-    }
-}

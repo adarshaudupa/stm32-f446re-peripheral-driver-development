@@ -27,7 +27,7 @@ void TIM2_Init(void) {
     // Enable TIM2 clock (bit 0 of APB1ENR)
     RCC->APB1ENR |= (1 << 0);
 
-    uint32_t tim_clk = get_apb1_freq_hz(); // currently 16 MHz
+    uint32_t tim_clk = get_apb1_freq_hz(); // currently 16 MHz(default)
     uint32_t target_hz = 1;
     uint32_t tick_hz   = 10000;
 
@@ -50,6 +50,22 @@ void TIM2_Init(void) {
     NVIC_EnableIRQ(TIM2_IRQn);  // This one stays as-is (CMSIS function)
     NVIC_SetPriority(TIM2_IRQn, 1);  // Lower priority number = higher priority
 }
+
+void TIM2_Init_1MHz(void)
+{
+	    // Enable TIM2 clock (bit 0 of APB1ENR)
+	    RCC->APB1ENR |= (1 << 0);
+
+	    // Set prescaler
+	    TIM2->PSC = 15;
+
+	    // Set auto-reload
+	    TIM2->ARR = 0xFFFFFFFF; // Max ARR for free-running counter
+
+	    // Enable update interrupt (bit 0 of DIER)
+	    TIM2->CR1 |= (1 << 0); // CEN = 1 (start counter)
+}
+
 
 void TIM2_IRQHandler(void)
 {
